@@ -1,0 +1,35 @@
+[package]
+authors = ["Carlen White <whitersuburban@gmail.com>"]
+edition = "2021"
+# If you change the name here, you must also do it in flake.nix (and run `cargo generate-lockfile` afterwards)
+name = "iron-button"
+description = "Simple program that uses XDG portals to bind global shortcuts to user-defined actions going beyond simple key-down."
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.clap]
+version = "4.5"
+features = ["derive"]
+
+[dependencies.ashpd]
+version = "0.12"
+
+[dependencies.tokio]
+version = "1.48"
+features = ["macros", "rt"]
+
+[dependencies.futures]
+version = "0.3"
+
+[dependencies.serde]
+version = "1.0"
+
+[dependencies.serde_yaml_ng]
+version = "0.10"
+
+[dependencies.dirs]
+version = "6.0"
+
+[dependencies.signal-hook]
+version = "0.3"

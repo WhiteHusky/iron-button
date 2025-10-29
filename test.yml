@@ -1,0 +1,15 @@
+
+binds:
+  test bind:
+    description: Demonstration bind
+    suggest: LOGO+ALT+Return
+    on_down:
+      !Run
+        program: echo
+        arguments:
+          - "Down!"
+    on_up:
+      !Run
+        program: echo
+        arguments:
+          - "Up!"
