@@ -117,7 +117,6 @@ async fn deactivation_thread(
 fn run_action(action: Action) {
     match action {
         Action::Run(run) => {
-            let program = &run.program;
             let mut command = Command::new(&run.program);
             if let Some(arguments) = &run.arguments {
                 command.args(arguments);
