@@ -1,9 +1,8 @@
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
 use clap::Parser;
 use futures::stream::StreamExt;
-use std::error::Error;
 use std::fs;
-use std::process::Command;
+use std::process::{Command, ExitCode, Termination};
 use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
 
@@ -13,8 +12,19 @@ use crate::args::Args;
 mod config;
 use crate::config::{Action, Configuration};
 
+mod errors;
+use crate::errors::Error;
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> ExitCode {
+    if let Err(error) = _main().await {
+        error.report()
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+async fn _main() -> Result<(), Error> {
     let args = Args::parse();
     if args.verbose {
         eprintln!("DEBUG {args:?}");
@@ -38,7 +48,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .expect("can not locate config directory")
                 .join("iron-button/config.yml")
         };
-        serde_yaml_ng::from_str(fs::read_to_string(config_path)?.as_str())?
+        serde_yaml_ng::from_str(
+            fs::read_to_string(config_path)
+                .map_err(Error::ConfigReadError)?
+                .as_str(),
+        )
+        .map_err(Error::ConfigParseError)?
     };
 
     let shortcuts = {
@@ -74,7 +89,7 @@ async fn activation_thread(
     tasks: &mut JoinSet<()>,
     global_shortcuts: &GlobalShortcuts<'_>,
     config: Arc<Mutex<Configuration>>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Error> {
     let mut rx_activated = global_shortcuts.receive_activated().await?;
     tasks.spawn(async move {
         let config = config.clone();
@@ -96,7 +111,7 @@ async fn deactivation_thread(
     tasks: &mut JoinSet<()>,
     global_shortcuts: &GlobalShortcuts<'_>,
     config: Arc<Mutex<Configuration>>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Error> {
     let mut rx_deactivated = global_shortcuts.receive_deactivated().await?;
     tasks.spawn(async move {
         let config = config.clone();
