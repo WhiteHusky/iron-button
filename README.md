@@ -6,9 +6,9 @@ Simple program that uses XDG portals to bind global shortcuts to user-defined ac
 Usage: iron-button [OPTIONS]
 
 Options:
-  -v, --verbose             whether to be verbose
-      --show-portal-config  reshow the XDG portal configuration dialog
-      --config <CONFIG>     override XDG_CONFIG_HOME/iron-button/config.yml with a different path
+  -v, --verbose             Whether to be verbose
+      --show-portal-config  Reshow the XDG portal configuration dialog
+      --config <CONFIG>     Override XDG_CONFIG_HOME/iron-button/config.yml with a different path
   -h, --help                Print help
   -V, --version             Print version
 ```
