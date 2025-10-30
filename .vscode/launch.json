@@ -13,15 +13,15 @@
                     "build",
                     "--bin=iron-button",
                     "--package=iron-button",
-                    "--",
-                    "--config=./test.yml"
                 ],
                 "filter": {
                     "name": "iron-button",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "--config=./test.yml"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {
