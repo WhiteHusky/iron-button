@@ -95,10 +95,7 @@ async fn activation_thread(
         let config = config.clone();
         while let Some(activated) = rx_activated.next().await {
             let config = config.lock().unwrap();
-            let bind = config
-                .binds
-                .get(&activated.shortcut_id().to_string())
-                .unwrap();
+            let bind = config.binds.get(activated.shortcut_id()).unwrap();
             if let Some(action) = &bind.on_down {
                 run_action(action.clone());
             }
@@ -117,10 +114,7 @@ async fn deactivation_thread(
         let config = config.clone();
         while let Some(deactivated) = rx_deactivated.next().await {
             let config = config.lock().unwrap();
-            let bind = config
-                .binds
-                .get(&deactivated.shortcut_id().to_string())
-                .unwrap();
+            let bind = config.binds.get(deactivated.shortcut_id()).unwrap();
             if let Some(action) = &bind.on_up {
                 run_action(action.clone());
             }
