@@ -17,7 +17,7 @@ version = "0.12"
 
 [dependencies.tokio]
 version = "1.48"
-features = ["macros", "rt"]
+features = ["macros", "rt", "signal"]
 
 [dependencies.futures]
 version = "0.3"
@@ -30,9 +30,6 @@ version = "0.10"
 
 [dependencies.dirs]
 version = "6.0"
-
-[dependencies.signal-hook]
-version = "0.3"
 
 [dependencies.thiserror]
 version = "2.0"

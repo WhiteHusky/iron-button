@@ -1,10 +1,14 @@
-use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
+use ashpd::desktop::global_shortcuts::{Activated, Deactivated, GlobalShortcuts, NewShortcut};
+use ashpd::desktop::Session;
 use clap::Parser;
 use futures::stream::StreamExt;
+use futures::Stream;
 use std::fs;
+use std::path::PathBuf;
 use std::process::{Command, ExitCode, Termination};
 use std::sync::{Arc, Mutex};
-use tokio::task::JoinSet;
+use tokio::select;
+use tokio::signal::unix::{signal, SignalKind};
 
 mod args;
 use crate::args::Args;
@@ -40,87 +44,118 @@ async fn _main() -> Result<(), Error> {
         return Ok(());
     }
 
-    let config: Configuration = {
-        let config_path = if let Some(path) = args.config {
-            path
-        } else {
-            dirs::config_dir()
-                .expect("can not locate config directory")
-                .join("iron-button/config.yml")
-        };
-        serde_yaml_ng::from_str(
-            fs::read_to_string(config_path)
-                .map_err(Error::ConfigReadError)?
-                .as_str(),
-        )
-        .map_err(Error::ConfigParseError)?
+    let config_path = if let Some(path) = args.config {
+        path
+    } else {
+        dirs::config_dir()
+            .expect("can not locate config directory")
+            .join("iron-button/config.yml")
     };
 
-    let shortcuts = {
-        let mut shortcuts = Vec::new();
-        for (id, bind) in &config.binds {
-            let mut shortcut = NewShortcut::new(id, bind.description.as_ref().unwrap_or(id));
-            if let Some(suggested_bind) = &bind.suggest {
-                shortcut = shortcut.preferred_trigger(suggested_bind.as_str());
-            }
-            shortcuts.push(shortcut);
-        }
-        shortcuts
-    };
+    let config = read_config(&config_path)?;
+
+    let shortcuts = collect_shortcuts(&config);
 
     global_shortcuts
         .bind_shortcuts(&session, &shortcuts, None)
         .await?
         .response()?;
 
-    let mut tasks = JoinSet::new();
-
     let config = Arc::new(Mutex::new(config));
 
-    activation_thread(&mut tasks, &global_shortcuts, config.clone()).await?;
-    deactivation_thread(&mut tasks, &global_shortcuts, config.clone()).await?;
-
-    tasks.join_all().await;
+    select! {
+        r = handle_activations(global_shortcuts.receive_activated().await?, config.clone()) => {r?}
+        r = handle_deactivations(global_shortcuts.receive_deactivated().await?, config.clone()) => {r?}
+        r = handle_signals(global_shortcuts, session, config.clone(), config_path) => {r?}
+    }
 
     Ok(())
 }
 
-async fn activation_thread(
-    tasks: &mut JoinSet<()>,
-    global_shortcuts: &GlobalShortcuts<'_>,
+fn collect_shortcuts(config: &Configuration) -> Vec<NewShortcut> {
+    let mut shortcuts = Vec::new();
+    for (id, bind) in &config.binds {
+        let mut shortcut = NewShortcut::new(id, bind.description.as_ref().unwrap_or(id));
+        if let Some(suggested_bind) = &bind.suggest {
+            shortcut = shortcut.preferred_trigger(suggested_bind.as_str());
+        }
+        shortcuts.push(shortcut);
+    }
+    shortcuts
+}
+
+fn read_config(config_path: &PathBuf) -> Result<Configuration, Error> {
+    Ok(serde_yaml_ng::from_str(
+        fs::read_to_string(config_path)
+            .map_err(Error::ConfigReadError)?
+            .as_str(),
+    )
+    .map_err(Error::ConfigParseError)?)
+}
+
+async fn handle_activations(
+    mut activations: impl Stream<Item = Activated> + Unpin,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
-    let mut rx_activated = global_shortcuts.receive_activated().await?;
-    tasks.spawn(async move {
-        let config = config.clone();
-        while let Some(activated) = rx_activated.next().await {
-            let config = config.lock().unwrap();
-            let bind = config.binds.get(activated.shortcut_id()).unwrap();
+    let config = config.clone();
+    while let Some(activated) = activations.next().await {
+        let config = config.lock().unwrap();
+        if let Some(bind) = config.binds.get(activated.shortcut_id()) {
             if let Some(action) = &bind.on_down {
                 run_action(action.clone());
             }
+        } else {
+            eprintln!("received unknown bind")
         }
-    });
-    Ok(())
+    }
+    Err(Error::UnexpectedEndOfKeys)
 }
 
-async fn deactivation_thread(
-    tasks: &mut JoinSet<()>,
-    global_shortcuts: &GlobalShortcuts<'_>,
+async fn handle_deactivations(
+    mut deactivations: impl Stream<Item = Deactivated> + Unpin,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
-    let mut rx_deactivated = global_shortcuts.receive_deactivated().await?;
-    tasks.spawn(async move {
-        let config = config.clone();
-        while let Some(deactivated) = rx_deactivated.next().await {
-            let config = config.lock().unwrap();
-            let bind = config.binds.get(deactivated.shortcut_id()).unwrap();
+    let config = config.clone();
+    while let Some(deactivated) = deactivations.next().await {
+        let config = config.lock().unwrap();
+        if let Some(bind) = config.binds.get(deactivated.shortcut_id()) {
             if let Some(action) = &bind.on_up {
                 run_action(action.clone());
             }
+        } else {
+            eprintln!("received unknown bind")
         }
-    });
-    Ok(())
+    }
+    Err(Error::UnexpectedEndOfKeys)
+}
+
+async fn handle_signals(
+    global_shortcuts: GlobalShortcuts<'_>,
+    session: Session<'_, GlobalShortcuts<'_>>,
+    config: Arc<Mutex<Configuration>>,
+    config_path: PathBuf,
+) -> Result<(), Error> {
+    let mut hangup = signal(SignalKind::hangup()).unwrap();
+
+    loop {
+        hangup.recv().await;
+        eprintln!("reloading configuration...");
+        let mut locked_config = config.lock().unwrap();
+        match read_config(&config_path) {
+            Ok(new_config) => {
+                let new_shortcuts = collect_shortcuts(&new_config);
+                *locked_config = new_config;
+                global_shortcuts
+                    .bind_shortcuts(&session, &new_shortcuts, None)
+                    .await?
+                    .response()?;
+            }
+            Err(err) => {
+                drop(locked_config); // Don't wait on us.
+                eprintln!("reloading config failed, see next line\n{err}");
+            }
+        }
+    }
 }
 
 fn run_action(action: Action) {
