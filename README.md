@@ -15,6 +15,8 @@ Options:
 
 Currently a prototype. If ran inside a terminal emulator, it may assume its identity. Otherwise it might be listed as `ashpd_AABBCC` if started as a systemd unit or other circumstances.
 
+You can also edit the config and send a SIGHUP to the process to reload the config without restarting the program.
+
 ## Config Sample
 
 ```yml

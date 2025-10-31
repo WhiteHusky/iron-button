@@ -33,3 +33,6 @@ version = "6.0"
 
 [dependencies.thiserror]
 version = "2.0"
+
+[dependencies.sd-notify]
+version = "0.4.5"

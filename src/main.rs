@@ -3,6 +3,7 @@ use ashpd::desktop::Session;
 use clap::Parser;
 use futures::stream::StreamExt;
 use futures::Stream;
+use sd_notify::{notify, NotifyState};
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Termination};
@@ -61,6 +62,8 @@ async fn _main() -> Result<(), Error> {
         .await?
         .response()?;
 
+let _ = notify(false, &[NotifyState::Ready]).inspect_err(|e| eprintln!("{e}"));
+
     let config = Arc::new(Mutex::new(config));
 
     select! {
@@ -118,7 +121,8 @@ async fn handle_deactivations(
     let config = config.clone();
     while let Some(deactivated) = deactivations.next().await {
         let config = config.lock().unwrap();
-        if let Some(bind) = config.binds.get(deactivated.shortcut_id()) {
+let shortcut_id = deactivated.shortcut_id();
+        if let Some(bind) = config.binds.get(shortcut_id) {
             if let Some(action) = &bind.on_up {
                 run_action(action.clone());
             }
@@ -140,6 +144,7 @@ async fn handle_signals(
     loop {
         hangup.recv().await;
         eprintln!("reloading configuration...");
+let _ = notify(false, &[NotifyState::Reloading]).inspect_err(|e| eprintln!("{e}"));
         let mut locked_config = config.lock().unwrap();
         match read_config(&config_path) {
             Ok(new_config) => {
@@ -155,6 +160,8 @@ async fn handle_signals(
                 eprintln!("reloading config failed, see next line\n{err}");
             }
         }
+let _ = notify(false, &[NotifyState::monotonic_usec_now().unwrap()])
+            .inspect_err(|e| eprintln!("{e}"));
     }
 }
 
