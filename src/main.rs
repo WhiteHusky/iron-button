@@ -62,7 +62,7 @@ async fn _main() -> Result<(), Error> {
         .await?
         .response()?;
 
-let _ = notify(false, &[NotifyState::Ready]).inspect_err(|e| eprintln!("{e}"));
+    let _ = notify(false, &[NotifyState::Ready]).inspect_err(|e| eprintln!("{e}"));
 
     let config = Arc::new(Mutex::new(config));
 
@@ -121,13 +121,13 @@ async fn handle_deactivations(
     let config = config.clone();
     while let Some(deactivated) = deactivations.next().await {
         let config = config.lock().unwrap();
-let shortcut_id = deactivated.shortcut_id();
+        let shortcut_id = deactivated.shortcut_id();
         if let Some(bind) = config.binds.get(shortcut_id) {
             if let Some(action) = &bind.on_up {
                 run_action(action.clone());
             }
         } else {
-            eprintln!("received unknown bind")
+            eprintln!("unknown bind: {shortcut_id}\ncheck system settings (or we are receiving the shortcuts of the terminal emulator)");
         }
     }
     Err(Error::UnexpectedEndOfKeys)
@@ -144,7 +144,7 @@ async fn handle_signals(
     loop {
         hangup.recv().await;
         eprintln!("reloading configuration...");
-let _ = notify(false, &[NotifyState::Reloading]).inspect_err(|e| eprintln!("{e}"));
+        let _ = notify(false, &[NotifyState::Reloading]).inspect_err(|e| eprintln!("{e}"));
         let mut locked_config = config.lock().unwrap();
         match read_config(&config_path) {
             Ok(new_config) => {
@@ -160,7 +160,7 @@ let _ = notify(false, &[NotifyState::Reloading]).inspect_err(|e| eprintln!("{e}"
                 eprintln!("reloading config failed, see next line\n{err}");
             }
         }
-let _ = notify(false, &[NotifyState::monotonic_usec_now().unwrap()])
+        let _ = notify(false, &[NotifyState::monotonic_usec_now().unwrap()])
             .inspect_err(|e| eprintln!("{e}"));
     }
 }
